@@ -1,60 +1,39 @@
 #define TOUCH_PIN 4
 #define LED_PIN   2
-#define THRESHOLD 500
+#define THRESHOLD 500  // 触摸阈值
 
-const int freq = 5000;
-const int resolution = 8;
-
-int speedLevel = 1;
-bool lastTouch = false;
-
-// 呼吸灯非阻塞变量
-int duty = 0;
-int dir = 1; // 1=变亮，-1=变暗
-unsigned long prevMillis = 0;
+// 布尔型状态变量
+bool ledState = false;
+// 记录上一次的触摸状态，用于边缘检测
+bool lastTouch = false; 
 
 void setup() {
   Serial.begin(115200);
-  ledcAttach(LED_PIN, freq, resolution);
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, ledState); // 初始化LED状态
 }
 
 void loop() {
-  // 触摸检测（立即响应）
+  // 读取原始触摸值
   int touchValue = touchRead(TOUCH_PIN);
+  Serial.print("Touch: ");
+  Serial.println(touchValue);
+
+  // 将原始值转换为逻辑状态：小于阈值视为被触摸
   bool currentTouch = (touchValue < THRESHOLD);
 
+  // 边缘检测：判断“上一次未触摸，当前被触摸的瞬间”
   if (currentTouch && !lastTouch) {
-    speedLevel = (speedLevel % 3) + 1;
-    Serial.print("Speed Level: ");
-    Serial.println(speedLevel);
-    delay(200);
+    // 翻转LED状态，实现自锁
+    ledState = !ledState;
+    digitalWrite(LED_PIN, ledState);
+
+    // 软件防抖：延时屏蔽抖动
+    delay(200); 
   }
+
+  // 更新上一次状态
   lastTouch = currentTouch;
-
-  // 档位速度
-  int step, delayTime;
-  if (speedLevel == 1) {
-    step = 1; delayTime = 7;
-  } else if (speedLevel == 2) {
-    step = 2; delayTime = 5;
-  } else {
-    step = 4; delayTime = 3;
-  }
-
-  // 非阻塞呼吸灯
-  if (millis() - prevMillis >= delayTime) {
-    prevMillis = millis();
-    duty += dir * step;
-
-    if (duty >= 255) {
-      duty = 255;
-      dir = -1;
-    }
-    if (duty <= 0) {
-      duty = 0;
-      dir = 1;
-    }
-
-    ledcWrite(LED_PIN, duty);
-  }
+  
+  delay(50);
 }

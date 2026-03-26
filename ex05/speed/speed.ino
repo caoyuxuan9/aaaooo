@@ -1,31 +1,60 @@
-// 定义两个LED引脚
-const int ledPinA = 2;  // LED A → D2
-const int ledPinB = 5;  // LED B → D5
+#define TOUCH_PIN 4
+#define LED_PIN   2
+#define THRESHOLD 500
 
-// PWM属性
 const int freq = 5000;
 const int resolution = 8;
 
+int speedLevel = 1;
+bool lastTouch = false;
+
+// 呼吸灯非阻塞变量
+int duty = 0;
+int dir = 1; // 1=变亮，-1=变暗
+unsigned long prevMillis = 0;
+
 void setup() {
   Serial.begin(115200);
-
-  // 绑定两个独立PWM通道
-  ledcAttach(ledPinA, freq, resolution);
-  ledcAttach(ledPinB, freq, resolution);
+  ledcAttach(LED_PIN, freq, resolution);
 }
 
 void loop() {
-  // A 从 0 → 255，B 从 255 → 0
-  for(int duty = 0; duty <= 255; duty++){
-    ledcWrite(ledPinA, duty);
-    ledcWrite(ledPinB, 255 - duty);
-    delay(8);
+  // 触摸检测（立即响应）
+  int touchValue = touchRead(TOUCH_PIN);
+  bool currentTouch = (touchValue < THRESHOLD);
+
+  if (currentTouch && !lastTouch) {
+    speedLevel = (speedLevel % 3) + 1;
+    Serial.print("Speed Level: ");
+    Serial.println(speedLevel);
+    delay(200);
+  }
+  lastTouch = currentTouch;
+
+  // 档位速度
+  int step, delayTime;
+  if (speedLevel == 1) {
+    step = 1; delayTime = 7;
+  } else if (speedLevel == 2) {
+    step = 2; delayTime = 5;
+  } else {
+    step = 4; delayTime = 3;
   }
 
-  // A 从 255 → 0，B 从 0 → 255
-  for(int duty = 255; duty >= 0; duty--){
-    ledcWrite(ledPinA, duty);
-    ledcWrite(ledPinB, 255 - duty);
-    delay(8);
+  // 非阻塞呼吸灯
+  if (millis() - prevMillis >= delayTime) {
+    prevMillis = millis();
+    duty += dir * step;
+
+    if (duty >= 255) {
+      duty = 255;
+      dir = -1;
+    }
+    if (duty <= 0) {
+      duty = 0;
+      dir = 1;
+    }
+
+    ledcWrite(LED_PIN, duty);
   }
 }
